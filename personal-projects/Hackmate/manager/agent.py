@@ -1,34 +1,64 @@
-# content_generator/manager/agent.py
-from google.adk.agents import SequentialAgent, LoopAgent
-from sub_agents.draft_writer.agent import draft_writer
-from sub_agents.freshness_checker.agent import freshness_checker
-from sub_agents.draft_refiner.agent import draft_refiner
-from sub_agents.emotional_polisher.agent import emotional_polisher
-from sub_agents.humanization_reviewer.agent import humanization_reviewer
-from sub_agents.humanization_refiner.agent import humanization_refiner
+# Hackmate/manager/agent.py
+import os
+from google.adk.agents import SequentialAgent, LoopAgent,Agent
 
-# Root Sequential workflow: DraftLoop -> Emotional Polisher -> HumanizationLoop
-# Note: SequentialAgent and LoopAgent should NOT include `instruction` (ADK schema).
+# === Import sub-agents ===
+from sub_agents.theme_refiner.agent import theme_refiner
+from sub_agents.theme_critic.agent import theme_critic
+from sub_agents.theme_validator.agent import theme_validator
+from sub_agents.idea_suggester.agent import idea_suggester
+from sub_agents.idea_reviewer.agent import idea_reviewer
+from sub_agents.roadmap.agent import roadmap_agent
+from sub_agents.techspec.agent import techspec_agent
+from sub_agents.pitch.agent import pitch_agent
+from sub_agents.ppt.agent import ppt_agent
+from sub_agents.validator.agent import validator_agent
+
+# === Load manager instructions (optional) ===
+BASE_DIR = os.path.dirname(__file__)
+TXT_PATH = os.path.join(BASE_DIR, "manager.txt")
+
+with open(TXT_PATH, "r", encoding="utf-8") as f:
+    manager_instructions = f.read()
+
+theme_collector = Agent(
+    name="theme_collector",
+    model="gemini-2.0-flash",
+    description="Collects the initial hackathon theme from the user.",
+    instruction="Ask the user for the hackathon theme and pass it to the next agents."
+)
+# === Root workflow ===
 root_agent = SequentialAgent(
-    name="content_manager",
-    description="Manager agent for Instagram content creation with loops for quality control",
-
+    name="Hack_Mate",
+    description=manager_instructions,
     sub_agents=[
-        # Draft loop: writer -> freshness check -> refiner (refiner calls exit_loop on PASS)
+         theme_collector,
+        # Step 1: Theme loop (refine → critic → validator, until validator says PASS)
         LoopAgent(
-            name="DraftLoop",
-            description="Loop between draft_writer, freshness_checker and draft_refiner until PASS or max iterations.",
-            sub_agents=[draft_writer, freshness_checker, draft_refiner],
-            max_iterations=10
+            name="ThemeLoop",
+            description="Loop to refine, critique, and validate the hackathon theme.",
+            sub_agents=[theme_refiner, theme_critic, theme_validator],
+            max_iterations=1,
         ),
-        # Emotional polish runs once on the accepted draft (or on the last refined caption)
-        emotional_polisher,
-        # Humanization loop: reviewer -> refiner (refiner calls exit_loop on PASS)
-        LoopAgent(
-            name="HumanizationLoop",
-            description="Loop between humanization_reviewer and humanization_refiner until PASS or max iterations.",
-            sub_agents=[humanization_reviewer, humanization_refiner],
-            max_iterations=10
-        )
+
+        # Step 2: Idea suggestion + review (straight sequence)
+        SequentialAgent(
+            name="IdeaStage",
+            description="Suggest and evaluate project ideas.",
+            sub_agents=[idea_suggester, idea_reviewer],
+        ),
+
+        # Step 3: Execution pipeline (roadmap → techspec → pitch → ppt → validator)
+        SequentialAgent(
+            name="ExecutionPipeline",
+            description="Turns the chosen idea into a concrete hackathon project plan and pitch deck.",
+            sub_agents=[
+                roadmap_agent,
+                techspec_agent,
+                pitch_agent,
+                ppt_agent,
+                validator_agent,
+            ],
+        ),
     ],
 )
