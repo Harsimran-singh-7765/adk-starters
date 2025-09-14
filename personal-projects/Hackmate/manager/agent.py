@@ -21,6 +21,7 @@ TXT_PATH = os.path.join(BASE_DIR, "manager.txt")
 with open(TXT_PATH, "r", encoding="utf-8") as f:
     manager_instructions = f.read()
 
+## inshort file handle  
 theme_collector = Agent(
     name="theme_collector",
     model="gemini-2.0-flash",

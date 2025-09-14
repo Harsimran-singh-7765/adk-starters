@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Google ADK Frontend</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/viz.js/2.1.2/viz.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; color: #333;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align:center; margin-bottom: 30px; color: white; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .main-card {
+            background: rgba(255,255,255,0.95); border-radius: 20px; padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1); backdrop-filter: blur(20px);
+        }
+        .config-section {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 30px; padding: 20px; background: #f8f9fa;
+            border-radius: 10px; border: 1px solid #e9ecef;
+        }
+        .form-group { display:flex; flex-direction: column; }
+        .form-group label { font-weight:600; margin-bottom:5px; color:#495057; font-size:0.9rem; }
+        .form-group input, .form-group select {
+            padding:10px; border:1px solid #ced4da; border-radius:6px; font-size:0.9rem;
+            transition: border-color 0.3s ease;
+        }
+        .form-group input:focus, .form-group select:focus { outline:none; border-color:#667eea; box-shadow:0 0 0 2px rgba(102,126,234,0.1); }
+        .chat-container { display:grid; grid-template-columns: 1fr 300px; gap:20px; height:500px; }
+        .chat-main { display:flex; flex-direction:column; }
+        .chat-messages {
+            flex:1; border:1px solid #dee2e6; border-radius:10px; padding:20px; overflow-y:auto;
+            background:#fff; margin-bottom:15px; max-height:400px;
+        }
+        .message { margin-bottom:15px; padding:12px 16px; border-radius:12px; max-width:80%; word-wrap:break-word; line-height:1.4; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+        .message.user { background:#667eea; color:white; margin-left:auto; border-bottom-right-radius:4px; }
+        .message.assistant { background:#f8f9fa; color:#333; border:1px solid #e9ecef; border-bottom-left-radius:4px; }
+        .message.system { background:#d1ecf1; color:#0c5460; max-width:100%; text-align:center; font-size:0.9rem; }
+        .message.error { background:#f8d7da; color:#721c24; max-width:100%; border:1px solid #f5c6cb; }
+        .message-meta { font-size:0.75rem; opacity:0.7; margin-top:5px; }
+        .chat-input { display:flex; gap:10px; }
+        .chat-input input { flex:1; padding:12px; border:1px solid #ced4da; border-radius:8px; font-size:1rem; }
+        .chat-input button { padding:12px 20px; background:#667eea; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; transition: background-color 0.3s ease; }
+        .chat-input button:hover:not(:disabled) { background:#5a67d8; }
+        .chat-input button:disabled { background:#adb5bd; cursor:not-allowed; }
+        .sidebar { background:#f8f9fa; border:1px solid #e9ecef; border-radius:10px; padding:20px; display:flex; flex-direction:column; }
+        .sidebar h3 { margin-bottom:15px; color:#495057; font-size:1.1rem; }
+        .status-item { display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.9rem; }
+        .status-item strong { color:#495057; }
+        .status-indicator { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; }
+        .status-connected { background:#28a745; }
+        .status-disconnected { background:#dc3545; }
+        .status-processing { background:#ffc107; animation:pulse 1.5s infinite; }
+        @keyframes pulse { 0%{opacity:1;}50%{opacity:0.5;}100%{opacity:1;} }
+        .action-buttons { margin-top:20px; display:flex; flex-direction:column; gap:10px; }
+        .btn { padding:8px 12px; border:1px solid #ced4da; border-radius:6px; background:white; cursor:pointer; transition:all 0.3s ease; font-size:0.9rem; }
+        .btn:hover { background:#e9ecef; border-color:#adb5bd; }
+        .btn.primary { background:#667eea; color:white; border-color:#667eea; }
+        .btn.primary:hover { background:#5a67d8; }
+        .btn.graph { background:#28a745; color:white; border-color:#28a745; }
+        .btn.graph:hover { background:#218838; }
+        .loading { display:inline-block; width:16px; height:16px; border:2px solid #f3f3f3; border-top:2px solid #667eea; border-radius:50%; animation:spin 1s linear infinite; margin-right:8px; }
+        @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.5); backdrop-filter:blur(5px); }
+        .modal-content { background:#fefefe; margin:5% auto; padding:30px; border-radius:15px; width:90%; max-width:800px; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:modalSlideIn 0.3s ease; }
+        @keyframes modalSlideIn { from{opacity:0; transform:translateY(-50px) scale(0.95);} to{opacity:1; transform:translateY(0) scale(1);} }
+        .close { color:#aaa; float:right; font-size:28px; font-weight:bold; line-height:1; cursor:pointer; transition: color 0.3s ease; }
+        .close:hover, .close:focus { color:#667eea; }
+        .graph-container { width:100%; height:400px; border:1px solid #e9ecef; border-radius:10px; margin-top:20px; background:#f8f9fa; display:flex; align-items:center; justify-content:center; font-family:monospace; overflow:auto; }
+        .graph-placeholder { color:#6c757d; text-align:center; padding:40px; }
+        .json-view { background:#f8f9fa; border:1px solid #e9ecef; border-radius:6px; padding:15px; margin-top:15px; font-family:'Monaco','Menlo',monospace; font-size:0.85rem; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+        .message-limit-warning { background:#fff3cd; color:#856404; padding:8px 12px; border-radius:6px; border:1px solid #ffeaa7; font-size:0.85rem; margin-bottom:10px; text-align:center; }
+        @media (max-width:768px) {
+            .chat-container { grid-template-columns:1fr; height:auto; }
+            .config-section { grid-template-columns:1fr; }
+            .header h1 { font-size:2rem; }
+            .modal-content { margin:10% auto; padding:20px; width:95%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Google ADK Chat Interface</h1>
+            <p>Agent Development Kit - Interactive Frontend</p>
+        </div>
+
+        <div class="main-card">
+            <div class="config-section">
+                <div class="form-group">
+                    <label for="appName">App Name</label>
+                    <input type="text" id="appName" value="manager" placeholder="Enter app name">
+                </div>
+                <div class="form-group">
+                    <label for="userId">User ID</label>
+                    <input type="text" id="userId" value="web_user" placeholder="Enter user ID">
+                </div>
+                <div class="form-group">
+                    <label for="sessionId">Session ID</label>
+                    <input type="text" id="sessionId" placeholder="Auto-generated" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="streamingMode">Response Mode</label>
+                    <select id="streamingMode">
+                        <option value="false">Blocking (/run)</option>
+                        <option value="true">Streaming (/run_sse)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="messageLimit">Message Limit</label>
+                    <select id="messageLimit">
+                        <option value="20">20 messages</option>
+                        <option value="50">50 messages</option>
+                        <option value="100">100 messages</option>
+                        <option value="-1">Unlimited</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-main">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message system">
+                            <span class="status-indicator status-disconnected"></span>
+                            Initializing connection to ADK server...
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="messageInput" placeholder="Type your message here..." disabled>
+                        <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+                    </div>
+                </div>
+
+                <div class="sidebar">
+                    <h3>Session Status</h3>
+                    <div class="status-item">
+                        <strong>Connection:</strong>
+                        <span id="connectionStatus">Connecting...</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Session:</strong>
+                        <span id="sessionStatus">Not Created</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Messages:</strong>
+                        <span id="messageCount">0</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Last Response:</strong>
+                        <span id="lastResponse">None</span>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="btn primary" onclick="createNewSession()">New Session</button>
+                        <button class="btn graph" onclick="showEventGraph()">View Graph</button>
+                        <button class="btn" onclick="clearChat()">Clear Chat</button>
+                        <button class="btn" onclick="testConnection()">Test Connection</button>
+                        <button class="btn" onclick="listSessions()">List Sessions</button>
+                        <button class="btn" onclick="showSessionDetails()">Session Details</button>
+                    </div>
+
+                    <div id="sessionDetails" class="json-view" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Modal -->
+    <div id="graphModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeGraphModal()">&times;</span>
+            <h2>Event Graph Visualization</h2>
+            <p>Enter Event ID to view the graph for that specific event:</p>
+
+            <div style="margin: 20px 0;">
+                <input type="text" id="eventIdInput" placeholder="Enter Event ID" style="padding: 10px; border: 1px solid #ced4da; border-radius: 6px; width: 300px; margin-right: 10px;">
+                <button onclick="loadEventGraph()" class="btn primary">Load Graph</button>
+            </div>
+
+            <div id="graphContainer" class="graph-container">
+                <div class="graph-placeholder">
+                    <h3>Graph Viewer</h3>
+                    <p>Enter an Event ID above to visualize the event graph structure.</p>
+                    <p><em>Note: This will fetch graph data from the ADK API endpoint</em></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API base - change to your ADK server if needed
+        const API_BASE = 'http://0.0.0.0:8000';
+        let messageCount = 0;
+        let currentSessionId = null;
+        let isConnected = false;
+        let isProcessing = false;
+        let lastEventId = null;
+
+        // Generate unique session ID
+        function generateSessionId() {
+            return 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Initialize session ID
+        function initializeSessionId() {
+            currentSessionId = generateSessionId();
+            document.getElementById('sessionId').value = currentSessionId;
+            document.getElementById('sessionStatus').textContent = 'Not Created';
+        }
+
+        // Count only actual message elements (exclude warnings)
+        function getActualMessageElements() {
+            const messagesDiv = document.getElementById('chatMessages');
+            return Array.from(messagesDiv.children).filter(el => el.classList && el.classList.contains('message'));
+        }
+
+        // Manage message limit and scrolling
+        function manageMessageLimit() {
+            const messagesDiv = document.getElementById('chatMessages');
+            const limit = parseInt(document.getElementById('messageLimit').value, 10);
+
+            if (limit === -1) return; // Unlimited
+
+            // Only consider actual messages (not warnings/placeholders)
+            let actualMessages = getActualMessageElements();
+
+            // Show warning when approaching limit (5 left)
+            if (actualMessages.length === (limit - 5)) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'message-limit-warning';
+                warningDiv.textContent = `Approaching message limit (${limit}). Older messages will be removed.`;
+                messagesDiv.insertBefore(warningDiv, messagesDiv.firstChild);
+            }
+
+            // Remove oldest actual messages if over the limit (leave system messages alone)
+            while (actualMessages.length > limit) {
+                const oldest = actualMessages[0];
+                if (oldest) {
+                    oldest.parentNode.removeChild(oldest);
+                    actualMessages = getActualMessageElements();
+                    // decrement global counter if appropriate
+                    if (messageCount > 0) messageCount--;
+                    document.getElementById('messageCount').textContent = messageCount;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Add message to chat
+        function addMessage(content, type = 'user', meta = '', eventId = null) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+
+            // message-limit-warning elements are not "message" class — keep consistent
+            messageDiv.className = `message ${type}`;
+
+            const contentDiv = document.createElement('div');
+            // allow HTML for meta or safe content; if any user-supplied content, consider escaping
+            contentDiv.innerHTML = content;
+            messageDiv.appendChild(contentDiv);
+
+            if (meta) {
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'message-meta';
+                metaDiv.textContent = meta;
+                messageDiv.appendChild(metaDiv);
+            }
+
+            if (eventId) {
+                messageDiv.setAttribute('data-event-id', eventId);
+                lastEventId = eventId;
+            }
+
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            if (type === 'user' || type === 'assistant') {
+                messageCount++;
+                document.getElementById('messageCount').textContent = messageCount;
+            }
+
+            manageMessageLimit();
+        }
+
+        // Update status indicators
+        function updateStatus(connection, session) {
+            // connection: 'connected' | 'disconnected' | 'processing'
+            const connSpan = document.getElementById('connectionStatus');
+            connSpan.innerHTML = `<span class="status-indicator status-${connection}"></span>${connection}`;
+            document.getElementById('sessionStatus').textContent = session;
+        }
+
+        // Test API connection
+        async function testConnection() {
+            try {
+                addMessage('Testing connection to ADK server...', 'system');
+                const response = await fetch(`${API_BASE}/list-apps`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const apps = await response.json();
+                    isConnected = true;
+                    updateStatus('connected', 'Ready');
+                    addMessage(`Connected! Available apps: ${Array.isArray(apps) ? apps.join(', ') : JSON.stringify(apps)}`, 'system');
+
+                    // Enable controls
+                    document.getElementById('messageInput').disabled = false;
+                    document.getElementById('sendButton').disabled = false;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                isConnected = false;
+                updateStatus('disconnected', 'Connection Failed');
+                addMessage(`Connection failed: ${error.message}`, 'error');
+                console.error('Connection test failed:', error);
+            }
+        }
+
+        // Create new session
+        async function createNewSession() {
+            if (!isConnected) {
+                addMessage('Please test connection first', 'error');
+                return;
+            }
+
+            const appName = document.getElementById('appName').value.trim();
+            const userId = document.getElementById('userId').value.trim();
+
+            if (!appName || !userId) {
+                addMessage('Please enter App Name and User ID', 'error');
+                return;
+            }
+
+            try {
+                addMessage('Creating new session...', 'system');
+                initializeSessionId();
+
+                const sessionPayload = {
+                    app_name: appName,
+                    user_id: userId,
+                    state: {}
+                };
+
+                const response = await fetch(`${API_BASE}/apps/${encodeURIComponent(appName)}/users/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(currentSessionId)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sessionPayload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateStatus('connected', 'Active');
+                    addMessage(`Session created: ${currentSessionId}`, 'system');
+                    console.log('Session created:', result);
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+            } catch (error) {
+                addMessage(`Failed to create session: ${error.message}`, 'error');
+                console.error('Session creation failed:', error);
+            }
+        }
+
+        // Handle reading streaming text chunks and appending to a single assistant message
+        async function handleStreamingResponse(response) {
+            // Create assistant message container first (empty)
+            const messagesDiv = document.getElementById('chatMessages');
+            const assistantDiv = document.createElement('div');
+            assistantDiv.className = 'message assistant';
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = ''; // we'll append text progressively
+            assistantDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(assistantDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // If response body is not readable, fallback to text()
+            if (!response.body || !response.body.getReader) {
+                const full = await response.text();
+                contentDiv.innerHTML = full;
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let done = false;
+            try {
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    if (value) {
+                        const chunk = decoder.decode(value, { stream: true });
+                        contentDiv.innerHTML += chunk;
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }
+                }
+            } catch (e) {
+                console.error('Streaming read error:', e);
+                contentDiv.innerHTML += `\n\n[Stream error: ${e.message}]`;
+            } finally {
+                // finished
+            }
+        }
+
+        // Send message
+        // Send message
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+
+    if (!message || isProcessing) return;
+
+    if (!currentSessionId) {
+        addMessage('⚠️ Please create a session first', 'error');
+        return;
+    }
+
+    const appName = document.getElementById('appName').value;
+    const userId = document.getElementById('userId').value;
+    const streaming = document.getElementById('streamingMode').value === 'true';
+
+    // Add user message to UI
+    addMessage(message, 'user');
+    input.value = '';
+
+    // Set processing state
+    isProcessing = true;
+    const sendBtn = document.getElementById('sendButton');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="loading"></span> Sending...';
+    updateStatus('processing', 'Processing...');
+
+    // Request payload
+    const requestPayload = {
+        app_name: appName,
+        user_id: userId,
+        session_id: currentSessionId,
+        new_message: {
+            parts: [{ text: message }],
+            role: "user"
+        }
+    };
+
+    try {
+        if (streaming) {
+            // ---- STREAMING MODE ----
+            const url = `${API_BASE}/run_sse`;
+            const evtSource = new EventSourcePolyfill(url, {
+                headers: { "Content-Type": "application/json" },
+                payload: JSON.stringify(requestPayload),
+                method: "POST"
+            });
+
+            // Create assistant container
+            const messagesDiv = document.getElementById('chatMessages');
+            const assistantDiv = document.createElement('div');
+            assistantDiv.className = 'message assistant';
+            const contentDiv = document.createElement('div');
+            assistantDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(assistantDiv);
+
+            // On each stream chunk
+            evtSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data && data.content && data.content.parts) {
+                        const text = data.content.parts.map(p => p.text || "").join(" ");
+                        contentDiv.innerHTML += text + " ";
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }
+                } catch (e) {
+                    console.warn("Non-JSON stream chunk:", event.data);
+                    contentDiv.innerHTML += event.data;
+                }
+            };
+
+            // On error
+            evtSource.onerror = (err) => {
+                console.error("Stream error", err);
+                evtSource.close();
+                isProcessing = false;
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = 'Send';
+                updateStatus('connected', 'Active');
+                document.getElementById('lastResponse').textContent = new Date().toLocaleTimeString();
+            };
+
+            // On end event
+            evtSource.addEventListener("end", () => {
+                evtSource.close();
+                isProcessing = false;
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = 'Send';
+                updateStatus('connected', 'Active');
+                document.getElementById('lastResponse').textContent = new Date().toLocaleTimeString();
+            });
+
+        } else {
+            // ---- NON-STREAMING MODE ----
+            const response = await fetch(`${API_BASE}/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const events = await response.json();
+            if (Array.isArray(events)) {
+                events.forEach((event, index) => {
+                    if (event.content?.parts) {
+                        const text = event.content.parts.map(p => p.text).join(" ");
+                        addMessage(text, 'assistant', `Event ${index + 1}`, event.id);
+                    }
+                });
+            } else {
+                addMessage(JSON.stringify(events), 'assistant');
+            }
+
+            document.getElementById('lastResponse').textContent = new Date().toLocaleTimeString();
+            updateStatus('connected', 'Active');
+        }
+    } catch (error) {
+        addMessage(`❌ Error: ${error.message}`, 'error');
+        console.error('Send message error:', error);
+        updateStatus('disconnected', 'Error');
+    } finally {
+        if (!streaming) {
+            isProcessing = false;
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = 'Send';
+        }
+    }
+}
+
+
+        // List sessions
+        async function listSessions() {
+            const appName = document.getElementById('appName').value;
+            const userId = document.getElementById('userId').value;
+
+            if (!appName || !userId) {
+                addMessage('Please enter App Name and User ID', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/apps/${encodeURIComponent(appName)}/users/${encodeURIComponent(userId)}/sessions`);
+                if (response.ok) {
+                    const sessions = await response.json();
+                    if (!Array.isArray(sessions) || sessions.length === 0) {
+                        addMessage('No sessions found', 'system');
+                    } else {
+                        // try to display id or fallback to JSON
+                        const ids = sessions.map(s => s.id || s.session_id || JSON.stringify(s)).join(', ');
+                        addMessage(`Found ${sessions.length} sessions: ${ids}`, 'system');
+                    }
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                addMessage(`Failed to list sessions: ${error.message}`, 'error');
+            }
+        }
+
+        // Show session details
+        async function showSessionDetails() {
+            if (!currentSessionId) {
+                addMessage('No active session', 'error');
+                return;
+            }
+
+            const appName = document.getElementById('appName').value;
+            const userId = document.getElementById('userId').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/apps/${encodeURIComponent(appName)}/users/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(currentSessionId)}`);
+                if (response.ok) {
+                    const sessionData = await response.json();
+                    const detailsDiv = document.getElementById('sessionDetails');
+                    detailsDiv.textContent = JSON.stringify(sessionData, null, 2);
+                    detailsDiv.style.display = detailsDiv.style.display === 'none' ? 'block' : 'none';
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                addMessage(`Failed to get session details: ${error.message}`, 'error');
+            }
+        }
+
+        // Show event graph modal
+        function showEventGraph() {
+            document.getElementById('graphModal').style.display = 'block';
+            if (lastEventId) {
+                document.getElementById('eventIdInput').value = lastEventId;
+            }
+        }
+
+        // Close graph modal
+        function closeGraphModal() {
+            document.getElementById('graphModal').style.display = 'none';
+        }
+async function loadEventGraph() {
+    const eventId = document.getElementById('eventIdInput').value.trim();
+    
+    if (!eventId) {
+        alert('Please enter an Event ID');
+        return;
+    }
+
+    if (!currentSessionId) {
+        alert('No active session');
+        return;
+    }
+
+    const appName = document.getElementById('appName').value;
+    const userId = document.getElementById('userId').value;
+    const graphContainer = document.getElementById('graphContainer');
+
+    try {
+        graphContainer.innerHTML = `
+            <div class="graph-placeholder">
+                <span class="loading"></span>Loading graph...
+            </div>
+        `;
+
+        const response = await fetch(
+            `${API_BASE}/apps/${appName}/users/${userId}/sessions/${currentSessionId}/events/${eventId}/graph`
+        );
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Parse JSON first
+        const data = await response.json();
+
+        if (!data.dot_src || !data.dot_src.trim()) {
+            throw new Error('No DOT source found in API response');
+        }
+
+        const graphDot = data.dot_src;
+
+        // Render using Viz.js
+        const viz = new Viz();
+        const svg = await viz.renderSVGElement(graphDot);
+
+        graphContainer.innerHTML = '';
+        graphContainer.appendChild(svg);
+
+    } catch (error) {
+        graphContainer.innerHTML = `
+            <div class="graph-placeholder">
+                <h3>Graph Load Error</h3>
+                <p style="color: #dc3545;">${error.message}</p>
+                <p><em>Please check the Event ID and try again</em></p>
+            </div>
+        `;
+        console.error('Graph loading failed:', error);
+    }
+}
+
+
+
+
+        // Clear chat
+        function clearChat() {
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '';
+            messageCount = 0;
+            document.getElementById('messageCount').textContent = '0';
+            addMessage('Chat cleared', 'system');
+        }
+
+        // Test connection on load? We'll initialize session id and enable manual test
+        window.addEventListener('load', () => {
+            initializeSessionId();
+            // keep message input disabled until successful testConnection
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('sendButton').disabled = true;
+
+            // Close modal when clicking outside content
+            const modal = document.getElementById('graphModal');
+            window.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeGraphModal();
+                }
+            });
+
+            // Optionally, you can auto-test connection on load by uncommenting:
+            // testConnection();
+        });
+    </script>
+    <script src="https://unpkg.com/viz.js@2.1.2/viz.js" type="javascript/worker"></script>
+<script src="https://unpkg.com/viz.js@2.1.2/full.render.js"></script>
+<script src="https://unpkg.com/event-source-polyfill"></script>
+
+
+</body>
+</html>
